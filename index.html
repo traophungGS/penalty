@@ -1,0 +1,170 @@
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penalty Kick</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #2f8f3f; font-family: system-ui, sans-serif; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #hint {
+    position: fixed; left: 50%; bottom: 4vh; transform: translateX(-50%);
+    background: rgba(0,0,0,.55); color: #fff; padding: 8px 16px; border-radius: 999px;
+    font-size: 15px; pointer-events: none;
+  }
+  #vid {
+    display: none; position: fixed; inset: 0; width: 100vw; height: 100vh;
+    background: #000; object-fit: contain; z-index: 10;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">Click the ball to take the penalty</div>
+<video id="vid" src="gabriel.mp4" playsinline preload="auto"></video>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const vid = document.getElementById('vid');
+const hint = document.getElementById('hint');
+let W, H, ball = { x: 0, y: 0, r: 0 }, hover = false, t = 0;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = innerWidth; H = innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ball.r = Math.max(18, Math.min(W, H) * 0.05);
+  ball.x = W / 2;
+  ball.y = H * 0.82;
+}
+addEventListener('resize', resize);
+resize();
+
+function drawBall(x, y, r) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.25)';
+  ctx.beginPath(); ctx.ellipse(x, y + r * 0.95, r * 0.95, r * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = '#222'; ctx.stroke();
+  ctx.clip();
+  ctx.fillStyle = '#222';
+  const pent = (cx, cy, s) => {
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + i * 2 * Math.PI / 5;
+      ctx.lineTo(cx + Math.cos(a) * s, cy + Math.sin(a) * s);
+    }
+    ctx.closePath(); ctx.fill();
+  };
+  pent(x, y, r * 0.36);
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI / 2 + i * 2 * Math.PI / 5;
+    pent(x + Math.cos(a) * r * 0.95, y + Math.sin(a) * r * 0.95, r * 0.3);
+    ctx.beginPath(); ctx.lineWidth = 2; ctx.strokeStyle = '#222';
+    ctx.moveTo(x + Math.cos(a) * r * 0.34, y + Math.sin(a) * r * 0.34);
+    ctx.lineTo(x + Math.cos(a) * r * 0.7, y + Math.sin(a) * r * 0.7);
+    ctx.stroke();
+  }
+  ctx.restore();
+  if (hover) {
+    ctx.beginPath(); ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+    ctx.strokeStyle = '#ffe14d'; ctx.lineWidth = 3; ctx.stroke();
+  }
+}
+
+function drawGoal() {
+  const gw = Math.min(W * 0.7, 760), gh = gw * 0.36;
+  const gx = (W - gw) / 2, gy = H * 0.16;
+  // net
+  ctx.fillStyle = 'rgba(0,0,0,.18)';
+  ctx.fillRect(gx, gy, gw, gh);
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1;
+  for (let x = gx; x <= gx + gw; x += 18) { ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x, gy + gh); ctx.stroke(); }
+  for (let y = gy; y <= gy + gh; y += 18) { ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx + gw, y); ctx.stroke(); }
+
+  drawKeeper(gx + gw / 2 + Math.sin(t * 1.6) * gw * 0.12, gy + gh, gh);
+
+  // posts
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 8; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(gx, gy + gh); ctx.lineTo(gx, gy); ctx.lineTo(gx + gw, gy); ctx.lineTo(gx + gw, gy + gh); ctx.stroke();
+}
+
+function drawKeeper(x, groundY, gh) {
+  const s = gh / 190; // scale
+  const sway = Math.sin(t * 3.2) * 10 * s;
+  ctx.save();
+  ctx.translate(x, groundY);
+  ctx.scale(s, s);
+  const green = '#1fa84a', dark = '#14793a', skin = '#f0c29a';
+  // legs (green pants)
+  ctx.fillStyle = green;
+  ctx.fillRect(-26, -78, 21, 78);
+  ctx.fillRect(5, -78, 21, 78);
+  // shoes
+  ctx.fillStyle = '#222';
+  ctx.fillRect(-30, -8, 28, 8); ctx.fillRect(2, -8, 28, 8);
+  // torso (green shirt)
+  ctx.fillStyle = green;
+  ctx.beginPath(); ctx.roundRect(-32, -150, 64, 78, 10); ctx.fill();
+  // arms swaying
+  ctx.save();
+  ctx.fillStyle = green;
+  ctx.translate(-32, -140); ctx.rotate(-0.9 + sway * 0.02);
+  ctx.beginPath(); ctx.roundRect(-8, 0, 16, 62, 8); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 66, 11, 0, 7); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.fillStyle = green;
+  ctx.translate(32, -140); ctx.rotate(0.9 - sway * 0.02);
+  ctx.beginPath(); ctx.roundRect(-8, 0, 16, 62, 8); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 66, 11, 0, 7); ctx.fill();
+  ctx.restore();
+  // shirt stripe
+  ctx.fillStyle = dark; ctx.fillRect(-32, -96, 64, 8);
+  // head
+  ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(0, -170, 20, 0, 7); ctx.fill();
+  ctx.fillStyle = '#3a2a1a'; ctx.beginPath(); ctx.arc(0, -176, 20, Math.PI, 0); ctx.fill();
+  ctx.fillStyle = '#222'; ctx.fillRect(-9, -168, 4, 4); ctx.fillRect(5, -168, 4, 4);
+  ctx.restore();
+}
+
+function draw() {
+  t += 0.016;
+  // grass stripes
+  ctx.fillStyle = '#2f8f3f'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#35a047';
+  for (let i = 0; i < 12; i++) if (i % 2) ctx.fillRect(0, H * 0.1 + i * H * 0.08, W, H * 0.08);
+  // penalty spot line
+  ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(W * 0.1, H * 0.5); ctx.lineTo(W * 0.9, H * 0.5); ctx.stroke();
+  drawGoal();
+  const bob = Math.sin(t * 4) * 3;
+  drawBall(ball.x, ball.y + bob, ball.r);
+  if (!played) requestAnimationFrame(draw);
+}
+
+function overBall(e) {
+  const p = e.touches ? e.touches[0] : e;
+  return Math.hypot(p.clientX - ball.x, p.clientY - ball.y) <= ball.r + 8;
+}
+
+let played = false;
+canvas.addEventListener('mousemove', e => {
+  hover = overBall(e);
+  canvas.style.cursor = hover ? 'pointer' : 'default';
+});
+canvas.addEventListener('pointerdown', e => {
+  if (played || !overBall(e)) return;
+  played = true;
+  hint.style.display = 'none';
+  vid.style.display = 'block';
+  vid.play().catch(() => { vid.muted = true; vid.play(); });
+});
+vid.addEventListener('ended', () => { /* stays on the last frame; reload to play again */ });
+
+draw();
+</script>
+</body>
+</html>
